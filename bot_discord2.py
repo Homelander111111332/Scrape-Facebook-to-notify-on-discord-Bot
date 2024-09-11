@@ -14,6 +14,7 @@ import re
 TOKEN = os.getenv('TOKEN')
 print(TOKEN)
 
+
 def clean_link_from_post_link(post_link):
     """
     Làm sạch liên kết bằng cách:
@@ -166,9 +167,9 @@ def init_driver():
 
     try:
         driver.get("https://mbasic.facebook.com")
-        cookies = read_cookies_from_file()
-        for cookie in cookies:
-            driver.add_cookie(cookie)
+        #cookies = read_cookies_from_file()
+        #for cookie in cookies:
+        #   driver.add_cookie(cookie)
         driver.refresh()
     except Exception as e:
         print(f"Error initializing driver: {e}")
@@ -176,11 +177,40 @@ def init_driver():
 
     return driver
 
-# Hàm để lấy các bài viết từ Facebook và chuẩn hóa
-def scrape_facebook_posts(driver, link):
+def login_facebook(driver, username, password, timeout=10):
     try:
-        driver.get(link)
+        # Truy cập trang đăng nhập của Facebook
+        driver.get("https://mbasic.facebook.com/login.php")
 
+        # Đợi cho ô nhập email xuất hiện (input[type='text'])
+        WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[type="text"]')))
+        
+        # Nhập email vào ô input[type='text']
+        email_input = driver.find_element(By.CSS_SELECTOR, 'input[type="text"]')
+        email_input.send_keys(username)
+
+        # Nhập password vào ô input[type='password']
+        password_input = driver.find_element(By.CSS_SELECTOR, 'input[type="password"]')
+        password_input.send_keys(password)
+        password_input.send_keys(Keys.RETURN)
+
+        # Đợi trang chuyển hướng thành công (ví dụ: đợi phần tử của trang chính xuất hiện)
+        WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.XPATH, "//div[@role='feed']")))
+
+        print("Đăng nhập thành công!")
+    except TimeoutException:
+        print("Đăng nhập thất bại: Quá thời gian chờ.")
+    except Exception as e:
+        print(f"Error during Facebook login: {e}")
+
+# Hàm để lấy các bài viết từ Facebook và chuẩn hóa
+def scrape_facebook_posts(driver, link, username=None, password=None):
+    try:
+        if username and password:
+            # Gọi hàm đăng nhập nếu có username và password
+            login_facebook(driver, username, password)
+            
+        driver.get(link)
         articles = driver.find_elements(By.TAG_NAME, 'article')
         result = []
 
