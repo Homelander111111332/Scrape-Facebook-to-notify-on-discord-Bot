@@ -154,6 +154,30 @@ def check_and_update_articles(articles, filename='recent_post.json', max_posts=5
         print("File recent_post.json được tạo và lưu bài viết.")
         return new_articles
 
+def login_facebook(driver, username, password, timeout=10):
+    try:
+        # Đợi cho ô nhập email xuất hiện (input[type='text'])
+        WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[type="text"]')))
+        
+        # Nhập email vào ô input[type='text']
+        email_input = driver.find_element(By.CSS_SELECTOR, 'input[type="text"]')
+        email_input.send_keys(username)
+
+        # Nhập password vào ô input[type='password']
+        password_input = driver.find_element(By.CSS_SELECTOR, 'input[type="password"]')
+        password_input.send_keys(password)
+        password_input.send_keys(Keys.RETURN)
+
+        # Đợi trang chuyển hướng thành công (ví dụ: đợi phần tử của trang chính xuất hiện)
+        WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.XPATH, "//div[@role='feed']")))
+
+        print("Đăng nhập thành công!")
+    except TimeoutException:
+        print("Đăng nhập thất bại: Quá thời gian chờ.")
+    except Exception as e:
+        print(f"Error during Facebook login: {e}")
+
+
 # Khởi tạo trình duyệt
 def init_driver():
     chrome_driver_path = "chromedriver.exe"
@@ -166,9 +190,10 @@ def init_driver():
 
     try:
         driver.get("https://mbasic.facebook.com")
-        cookies = read_cookies_from_file()
-        for cookie in cookies:
-            driver.add_cookie(cookie)
+        login_facebook(driver, 'your_username', 'your_password')
+        #cookies = read_cookies_from_file()
+        #for cookie in cookies:
+        #    driver.add_cookie(cookie)
         driver.refresh()
     except Exception as e:
         print(f"Error initializing driver: {e}")
