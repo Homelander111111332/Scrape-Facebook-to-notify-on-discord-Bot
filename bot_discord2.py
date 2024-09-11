@@ -7,12 +7,16 @@ import os
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
 import asyncio
 import time
 import re
 
 TOKEN = os.getenv('TOKEN')
-print(TOKEN)
+EMAIL = os.getenv('EMAIL')
+PASSWORD = os.getenv('PASSWORD')
 
 def clean_link_from_post_link(post_link):
     """
@@ -74,36 +78,27 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 
 # Hàm đọc cookie từ file cookie.json và trả về danh sách cookies
-def read_cookies_from_file(cookie_file='cookie.json'):
-    try:
-
-        cookies = json.loads(os.getenv('COOKIES'))
-        
-        selenium_cookies = []
-        for cookie in cookies:
-            selenium_cookie = {
-                'name': cookie['name'],
-                'value': cookie['value'],
-                'domain': cookie['domain'],
-                'path': cookie.get('path', '/'),
-                'secure': cookie.get('secure', False),
-                # Chuyển đổi `expirationDate` thành `expiry` cho Selenium (nếu có)
-                'expiry': int(cookie['expirationDate']) if 'expirationDate' in cookie else None
-            }
-            # Loại bỏ trường 'expiry' nếu nó là None (Selenium không chấp nhận giá trị None cho trường này)
-            if selenium_cookie['expiry'] is None:
-                selenium_cookie.pop('expiry')
-            
-            selenium_cookies.append(selenium_cookie)
-
-        return selenium_cookies
+def read_cookies_from_json(cookies):
+    cookies = json.loads(cookies)
     
-    except FileNotFoundError:
-        print(f"File {cookie_file} không tồn tại.")
-        return []
-    except json.JSONDecodeError:
-        print(f"File {cookie_file} không đúng định dạng JSON.")
-        return []
+    selenium_cookies = []
+    for cookie in cookies:
+        selenium_cookie = {
+            'name': cookie['name'],
+            'value': cookie['value'],
+            'domain': cookie['domain'],
+            'path': cookie.get('path', '/'),
+            'secure': cookie.get('secure', False),
+            # Chuyển đổi `expirationDate` thành `expiry` cho Selenium (nếu có)
+            'expiry': int(cookie['expirationDate']) if 'expirationDate' in cookie else None
+        }
+        # Loại bỏ trường 'expiry' nếu nó là None (Selenium không chấp nhận giá trị None cho trường này)
+        if selenium_cookie['expiry'] is None:
+            selenium_cookie.pop('expiry')
+        
+        selenium_cookies.append(selenium_cookie)
+
+    return selenium_cookies
 
 # Hàm tải ảnh từ URL
 async def download_image(url):
@@ -154,32 +149,28 @@ def check_and_update_articles(articles, filename='recent_post.json', max_posts=5
         print("File recent_post.json được tạo và lưu bài viết.")
         return new_articles
 
-def login_facebook(driver, username, password, timeout=10):
+def login_facebook(driver, username, password, timeout=100):
     try:
-        # Đợi cho ô nhập email xuất hiện (input[type='text'])
-        WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[type="text"]')))
-        
-        # Nhập email vào ô input[type='text']
-        email_input = driver.find_element(By.CSS_SELECTOR, 'input[type="text"]')
+        # Wait for the email input field to be available
+        # Find the email input field and enter the email
+        email_input = driver.find_element(By.CSS_SELECTOR, '#email')
         email_input.send_keys(username)
 
-        # Nhập password vào ô input[type='password']
-        password_input = driver.find_element(By.CSS_SELECTOR, 'input[type="password"]')
+        # Find the password input field and enter the password
+        password_input = driver.find_element(By.CSS_SELECTOR, '#pass')
         password_input.send_keys(password)
-        password_input.send_keys(Keys.RETURN)
 
-        # Đợi trang chuyển hướng thành công (ví dụ: đợi phần tử của trang chính xuất hiện)
-        WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.XPATH, "//div[@role='feed']")))
+        # Find the login button and click it
+        login_button = driver.find_element(By.CSS_SELECTOR, '#loginbutton')
+        login_button.click()
 
-        print("Đăng nhập thành công!")
-    except TimeoutException:
-        print("Đăng nhập thất bại: Quá thời gian chờ.")
+
+        print("Đăng nhập thành công và trang đã chuyển hướng!")
     except Exception as e:
         print(f"Error during Facebook login: {e}")
 
-
 # Khởi tạo trình duyệt
-def init_driver():
+def init_driver(EMAIL, PASSWORD):
     chrome_driver_path = "chromedriver.exe"
     chrome_options = webdriver.ChromeOptions()
     chrome_options.add_argument("--disable-gpu")
@@ -189,11 +180,12 @@ def init_driver():
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
     try:
-        driver.get("https://mbasic.facebook.com")
-        login_facebook(driver, 'your_username', 'your_password')
-        #cookies = read_cookies_from_file()
-        #for cookie in cookies:
-        #    driver.add_cookie(cookie)
+        driver.get("https://www.facebook.com/login")
+        login_facebook(driver, EMAIL, PASSWORD)
+        cookies = driver.get_cookies()
+
+        for cookie in cookies:
+            driver.add_cookie(cookie)
         driver.refresh()
     except Exception as e:
         print(f"Error initializing driver: {e}")
@@ -319,7 +311,7 @@ async def on_ready():
     print(f"Bot {client.user} đã sẵn sàng!")
     channel = client.get_channel(1282376586888347658)
     
-    driver = init_driver()
+    driver = init_driver(EMAIL, PASSWORD)
 
     # Tạo một task cho việc scraping và gửi bài post lên Discord
     client.loop.create_task(scrape_and_post(driver, channel))
